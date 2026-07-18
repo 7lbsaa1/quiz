@@ -40,6 +40,17 @@
         </form>
     </div>
 
+    <!-- سكريبت الحماية -->
+    <script>
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.onkeydown = function(e) {
+            if(e.keyCode == 123) return false; // F12
+            if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false;
+            if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) return false;
+            if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false;
+        }
+    </script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -51,8 +62,7 @@
             projectId: "admin-37e09",
             storageBucket: "admin-37e09.firebasestorage.app",
             messagingSenderId: "637953105703",
-            appId: "1:637953105703:web:db22cf323186b157de5302",
-            measurementId: "G-GQDLTK8FY6"
+            appId: "1:637953105703:web:db22cf323186b157de5302"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -76,17 +86,14 @@
                     errorMsg.style.display = "block";
                     btn.disabled = false;
                     btn.innerText = "دخول الاختبار";
-                    // نحفظ رقمه لكي يرى نتيجته إذا تم إعلانها
                     localStorage.setItem('studentPhone', phone);
                     setTimeout(() => window.location.href = 'quiz.html', 2000);
                 } else {
-                    // تسجيل جديد أو لم يكمل الاختبار
                     await set(userRef, { name: name, phone: phone, finished: false, score: 0, resultPublished: false });
                     localStorage.setItem('studentPhone', phone);
                     window.location.href = 'quiz.html';
                 }
             } catch (error) {
-                console.error("Error:", error);
                 errorMsg.innerText = "حدث خطأ في الاتصال بقاعدة البيانات.";
                 errorMsg.style.display = "block";
                 btn.disabled = false;
