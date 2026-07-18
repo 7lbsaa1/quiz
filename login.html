@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول - الاختبار الكروي</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+        body {
+            margin: 0; padding: 0; font-family: 'Cairo', sans-serif;
+            background: url('https://i.pinimg.com/1200x/19/7a/21/197a21c924994ae84016e9a56d959b36.jpg') no-repeat center center fixed;
+            background-size: cover; display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px);
+            padding: 40px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.2);
+            color: white; width: 100%; max-width: 400px; text-align: center;
+        }
+        input {
+            width: 100%; padding: 12px; margin: 10px 0 20px; border: none; border-radius: 8px;
+            box-sizing: border-box; font-family: 'Cairo', sans-serif;
+        }
+        button {
+            width: 100%; padding: 12px; background: #28a745; color: white; border: none;
+            border-radius: 8px; font-size: 16px; cursor: pointer; font-family: 'Cairo', sans-serif; font-weight: bold;
+        }
+        button:hover { background: #218838; }
+        .error { color: #ff4d4d; font-size: 14px; margin-bottom: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="glass-panel">
+        <h2>دخول الاختبار الكروي</h2>
+        <div id="errorMsg" class="error"></div>
+        <form id="loginForm">
+            <input type="text" id="fullName" placeholder="الاسم الثنائي" required pattern="\S+\s+\S+.*" title="يرجى إدخال الاسم الثنائي على الأقل">
+            <input type="tel" id="phone" placeholder="رقم الهاتف" required>
+            <button type="submit" id="submitBtn">دخول الاختبار</button>
+        </form>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWTSFTecq2_QeDyg90mM1hPNytwPXYyZ0",
+            authDomain: "admin-37e09.firebaseapp.com",
+            databaseURL: "https://admin-37e09-default-rtdb.firebaseio.com",
+            projectId: "admin-37e09",
+            storageBucket: "admin-37e09.firebasestorage.app",
+            messagingSenderId: "637953105703",
+            appId: "1:637953105703:web:db22cf323186b157de5302",
+            measurementId: "G-GQDLTK8FY6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('fullName').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const errorMsg = document.getElementById('errorMsg');
+            const btn = document.getElementById('submitBtn');
+
+            btn.disabled = true;
+            btn.innerText = "جاري التحقق...";
+
+            const userRef = ref(db, 'students/' + phone);
+            try {
+                const snapshot = await get(userRef);
+                if (snapshot.exists() && snapshot.val().finished) {
+                    errorMsg.innerText = "لقد قمت بأداء هذا الاختبار بالفعل!";
+                    errorMsg.style.display = "block";
+                    btn.disabled = false;
+                    btn.innerText = "دخول الاختبار";
+                    // نحفظ رقمه لكي يرى نتيجته إذا تم إعلانها
+                    localStorage.setItem('studentPhone', phone);
+                    setTimeout(() => window.location.href = 'quiz.html', 2000);
+                } else {
+                    // تسجيل جديد أو لم يكمل الاختبار
+                    await set(userRef, { name: name, phone: phone, finished: false, score: 0, resultPublished: false });
+                    localStorage.setItem('studentPhone', phone);
+                    window.location.href = 'quiz.html';
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                errorMsg.innerText = "حدث خطأ في الاتصال بقاعدة البيانات.";
+                errorMsg.style.display = "block";
+                btn.disabled = false;
+                btn.innerText = "دخول الاختبار";
+            }
+        });
+    </script>
+</body>
+</html>
