@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المعلم - الاختبار الكروي</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+        body { margin: 0; padding: 20px; font-family: 'Cairo', sans-serif; background: #f4f6f9; color: #333; }
+        .header { background: #343a40; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;}
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        th, td { padding: 15px; text-align: right; border-bottom: 1px solid #ddd; }
+        th { background: #007bff; color: white; }
+        tr:hover { background: #f1f1f1; }
+        
+        button { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; font-family: 'Cairo'; font-weight: bold; margin-left: 5px; color: white;}
+        .btn-view { background: #17a2b8; }
+        .btn-publish { background: #28a745; }
+        .btn-publish:disabled { background: #6c757d; cursor: not-allowed; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .close { float: left; cursor: pointer; font-size: 24px; color: red; }
+        .answer-box { background: #f8f9fa; padding: 10px; border-left: 5px solid #ccc; margin-bottom: 10px; border-radius: 5px; }
+        .correct { border-color: #28a745; }
+        .wrong { border-color: #dc3545; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>لوحة تحكم الاختبار الكروي</h2>
+        <p>إجمالي المُمتحنين: <span id="totalCount">0</span></p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>الاسم</th>
+                <th>رقم الهاتف</th>
+                <th>النتيجة</th>
+                <th>الحالة</th>
+                <th>الإجراءات</th>
+            </tr>
+        </thead>
+        <tbody id="studentsTable">
+            <tr><td colspan="5" style="text-align: center;">جاري تحميل البيانات...</td></tr>
+        </tbody>
+    </table>
+
+    <!-- Modal لعرض الإجابات -->
+    <div id="answersModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalStudentName"></h3>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWTSFTecq2_QeDyg90mM1hPNytwPXYyZ0",
+            authDomain: "admin-37e09.firebaseapp.com",
+            databaseURL: "https://admin-37e09-default-rtdb.firebaseio.com",
+            projectId: "admin-37e09",
+            storageBucket: "admin-37e09.firebasestorage.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        let studentsData = {};
+
+        const studentsRef = ref(db, 'students');
+        onValue(studentsRef, (snapshot) => {
+            const tbody = document.getElementById('studentsTable');
+            tbody.innerHTML = '';
+            
+            if (snapshot.exists()) {
+                studentsData = snapshot.val();
+                let count = 0;
+                for (const phone in studentsData) {
+                    const s = studentsData[phone];
+                    if(!s.finished) continue; // نعرض فقط من أنهى الاختبار
+                    count++;
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${s.name}</td>
+                        <td dir="ltr" style="text-align:right;">${s.phone}</td>
+                        <td><strong>${s.score} / 5</strong></td>
+                        <td>${s.resultPublished ? '<span style="color:green;">تم النشر</span>' : '<span style="color:orange;">مخفية</span>'}</td>
+                        <td>
+                            <button class="btn-view" onclick="window.viewAnswers('${phone}')">عرض الإجابات</button>
+                            <button class="btn-publish" onclick="window.publishResult('${phone}')" ${s.resultPublished ? 'disabled' : ''}>إظهار النتيجة للطالب</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+                document.getElementById('totalCount').innerText = count;
+                if(count === 0) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">لا يوجد طلاب أنهوا الاختبار بعد</td></tr>';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">لا توجد بيانات</td></tr>';
+            }
+        });
+
+        window.viewAnswers = function(phone) {
+            const s = studentsData[phone];
+            document.getElementById('modalStudentName').innerText = `إجابات الطالب: ${s.name}`;
+            
+            let html = '';
+            if(s.answers) {
+                s.answers.forEach((ans, idx) => {
+                    const statusClass = ans.isCorrect ? 'correct' : 'wrong';
+                    html += `
+                        <div class="answer-box ${statusClass}">
+                            <p><strong>س ${idx+1}:</strong> ${ans.question}</p>
+                            <p>إجابته: <span style="color:${ans.isCorrect ? 'green' : 'red'};">${ans.userAns}</span></p>
+                            ${!ans.isCorrect ? `<p>الإجابة الصحيحة: <strong>${ans.correctAns}</strong></p>` : ''}
+                        </div>
+                    `;
+                });
+            } else {
+                html = '<p>لا توجد تفاصيل إجابات مسجلة.</p>';
+            }
+            
+            document.getElementById('modalBody').innerHTML = html;
+            document.getElementById('answersModal').style.display = 'flex';
+        }
+
+        window.publishResult = async function(phone) {
+            if(confirm('هل أنت متأكد من إظهار النتيجة لهذا الطالب؟')) {
+                const userRef = ref(db, 'students/' + phone);
+                await update(userRef, { resultPublished: true });
+            }
+        }
+
+        window.closeModal = function() {
+            document.getElementById('answersModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
