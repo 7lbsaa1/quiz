@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الاختبار الكروي</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+        body {
+            margin: 0; padding: 0; font-family: 'Cairo', sans-serif;
+            background: url('https://i.pinimg.com/1200x/19/7a/21/197a21c924994ae84016e9a56d959b36.jpg') no-repeat center center fixed;
+            background-size: cover; display: flex; justify-content: center; align-items: center; min-height: 100vh;
+        }
+        .quiz-container {
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(15px); padding: 30px;
+            border-radius: 15px; color: white; width: 90%; max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .question-img { max-width: 100%; height: 250px; object-fit: contain; border-radius: 10px; margin-bottom: 15px; display: none; }
+        .options { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .option-label {
+            background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; cursor: pointer;
+            transition: 0.3s; display: flex; align-items: center;
+        }
+        .option-label:hover { background: rgba(255,255,255,0.2); }
+        .option-label input { margin-left: 10px; }
+        .controls { display: flex; justify-content: space-between; margin-top: 25px; }
+        button {
+            padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
+            font-family: 'Cairo', sans-serif; font-weight: bold; font-size: 16px; transition: 0.3s;
+        }
+        .btn-next { background: #007bff; color: white; }
+        .btn-prev { background: #6c757d; color: white; }
+        .btn-finish { background: #28a745; color: white; display: none; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .result-box { text-align: center; }
+        .correct-ans { color: #28a745; font-weight: bold; }
+        .wrong-ans { color: #dc3545; font-weight: bold; }
+        .review-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div class="quiz-container" id="mainContainer">
+        <h3 id="loadingText" style="text-align:center;">جاري التحميل...</h3>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWTSFTecq2_QeDyg90mM1hPNytwPXYyZ0",
+            authDomain: "admin-37e09.firebaseapp.com",
+            databaseURL: "https://admin-37e09-default-rtdb.firebaseio.com",
+            projectId: "admin-37e09",
+            storageBucket: "admin-37e09.firebasestorage.app",
+            messagingSenderId: "637953105703",
+            appId: "1:637953105703:web:db22cf323186b157de5302"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const phone = localStorage.getItem('studentPhone');
+
+        if (!phone) window.location.href = 'login.html';
+
+        const questions = [
+            { q: "من هو هداف دوري أبطال أوروبا التاريخي؟", img: "", options: ["ليونيل ميسي", "كريستيانو رونالدو", "روبرت ليفاندوفسكي", "كريم بنزيما"], answer: "كريستيانو رونالدو" },
+            { q: "من هو اللاعب في الصورة؟", img: "https://i.pinimg.com/1200x/f2/37/b9/f237b927d8301e08ae4bdc90c970c21f.jpg", options: ["بوكايو ساكا", "مايكل أوليسي", "كول بالمر", "جيريمي دوكو"], answer: "مايكل أوليسي" },
+            { q: "أين يلعب هذا اللاعب حالياً؟", img: "https://i.pinimg.com/736x/99/2c/6b/992c6bdb06ba2ee740216a349cf047ea.jpg", options: ["بارما", "كومو", "مونزا", "كالياري"], answer: "كومو" },
+            { q: "في أي سنة حصل هذا اللاعب على الكرة الذهبية؟", img: "https://i.pinimg.com/1200x/f2/c6/dc/f2c6dc3b96335a2df075bafea2050d16.jpg", options: ["2001", "2003", "2004", "2006"], answer: "2003" },
+            { q: "من هذا اللاعب؟", img: "https://i.pinimg.com/1200x/24/03/93/240393533571a78950ca4da9ec580b50.jpg", options: ["أوليفر كان", "ينز ليمان", "بيتر شمايكل", "مانويل نوير"], answer: "أوليفر كان" }
+        ];
+
+        let currentQ = 0;
+        let userAnswers = {};
+        const container = document.getElementById('mainContainer');
+
+        async function init() {
+            const userRef = ref(db, 'students/' + phone);
+            const snapshot = await get(userRef);
+            if (!snapshot.exists()) { window.location.href = 'login.html'; return; }
+            
+            const userData = snapshot.val();
+            
+            if (userData.finished) {
+                if (userData.resultPublished) {
+                    showResultsView(userData);
+                } else {
+                    container.innerHTML = `<div class="result-box">
+                        <h2>لقد امتحنت بالفعل!</h2>
+                        <p>شكراً لك، ستظهر النتيجة قريباً عندما يعتمدها المعلم.</p>
+                    </div>`;
+                }
+            } else {
+                renderQuizUI();
+                loadQuestion();
+            }
+        }
+
+        function renderQuizUI() {
+            container.innerHTML = `
+                <div id="quizSection">
+                    <h2 id="qNumber">سؤال 1 من 5</h2>
+                    <h3 id="qText"></h3>
+                    <img id="qImg" class="question-img" src="" alt="صورة السؤال">
+                    <div class="options" id="optionsContainer"></div>
+                    <div class="controls">
+                        <button class="btn-prev" id="prevBtn" onclick="window.prevQ()">السابق</button>
+                        <button class="btn-next" id="nextBtn" onclick="window.nextQ()">التالي</button>
+                        <button class="btn-finish" id="finishBtn" onclick="window.finishQuiz()">إنهاء الاختبار</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.loadQuestion = function() {
+            document.getElementById('qNumber').innerText = `سؤال ${currentQ + 1} من ${questions.length}`;
+            document.getElementById('qText').innerText = questions[currentQ].q;
+            
+            const imgEl = document.getElementById('qImg');
+            if(questions[currentQ].img) {
+                imgEl.src = questions[currentQ].img;
+                imgEl.style.display = "block";
+            } else {
+                imgEl.style.display = "none";
+            }
+
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = "";
+            questions[currentQ].options.forEach((opt, index) => {
+                const isChecked = userAnswers[currentQ] === opt ? "checked" : "";
+                optionsContainer.innerHTML += `
+                    <label class="option-label" onclick="window.saveAnswer('${opt}')">
+                        <input type="radio" name="qOption" value="${opt}" ${isChecked}>
+                        ${opt}
+                    </label>
+                `;
+            });
+
+            document.getElementById('prevBtn').disabled = currentQ === 0;
+            
+            if (currentQ === questions.length - 1) {
+                document.getElementById('nextBtn').style.display = "none";
+                document.getElementById('finishBtn').style.display = "block";
+            } else {
+                document.getElementById('nextBtn').style.display = "block";
+                document.getElementById('finishBtn').style.display = "none";
+            }
+        }
+
+        window.saveAnswer = function(opt) {
+            userAnswers[currentQ] = opt;
+            // تحديث الراديو ليعكس التحديد
+            document.querySelectorAll('input[name="qOption"]').forEach(el => {
+                el.checked = (el.value === opt);
+            });
+        }
+
+        window.nextQ = function() {
+            if (currentQ < questions.length - 1) { currentQ++; loadQuestion(); }
+        }
+
+        window.prevQ = function() {
+            if (currentQ > 0) { currentQ--; loadQuestion(); }
+        }
+
+        window.finishQuiz = async function() {
+            if(Object.keys(userAnswers).length < questions.length) {
+                alert("يرجى الإجابة على جميع الأسئلة قبل الإنهاء.");
+                return;
+            }
+            
+            document.getElementById('finishBtn').innerText = "جاري الحفظ...";
+            document.getElementById('finishBtn').disabled = true;
+
+            let score = 0;
+            let finalAnswers = [];
+            questions.forEach((q, idx) => {
+                const isCorrect = userAnswers[idx] === q.answer;
+                if(isCorrect) score++;
+                finalAnswers.push({
+                    question: q.q,
+                    userAns: userAnswers[idx],
+                    correctAns: q.answer,
+                    isCorrect: isCorrect
+                });
+            });
+
+            const userRef = ref(db, 'students/' + phone);
+            await update(userRef, {
+                finished: true,
+                score: score,
+                answers: finalAnswers
+            });
+
+            container.innerHTML = `<div class="result-box">
+                <h2>تم تسليم الإجابات بنجاح!</h2>
+                <p>شكراً لك، ستظهر النتيجة قريباً.</p>
+            </div>`;
+        }
+
+        function showResultsView(userData) {
+            let html = `<div class="result-box"><h2>نتيجتك: ${userData.score} / 5</h2><div style="text-align:right; margin-top:20px;">`;
+            userData.answers.forEach((ans, idx) => {
+                html += `
+                    <div class="review-item">
+                        <p><strong>س ${idx+1}:</strong> ${ans.question}</p>
+                        <p>إجابتك: <span class="${ans.isCorrect ? 'correct-ans' : 'wrong-ans'}">${ans.userAns}</span></p>
+                        ${!ans.isCorrect ? `<p>الإجابة الصحيحة: <span class="correct-ans">${ans.correctAns}</span></p>` : ''}
+                    </div>
+                `;
+            });
+            html += `</div></div>`;
+            container.innerHTML = html;
+        }
+
+        init();
+    </script>
+</body>
+</html>
